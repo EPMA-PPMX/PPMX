@@ -11,7 +11,11 @@ const ALLOWED_TABLES = [
   'project_templates',
   'change_requests',
   'project_risks',
-  'project_issues'
+  'project_issues',
+  'overview_configurations',
+  'project_field_values',
+  'project_documents',
+  'project_budgets'
 ];
 
 const app = express();
