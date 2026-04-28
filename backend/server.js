@@ -5,6 +5,15 @@ const multer = require('multer');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const { createClient } = require('@supabase/supabase-js');
 
+const ALLOWED_TABLES = [
+  'projects',
+  'custom_fields',
+  'project_templates',
+  'change_requests',
+  'project_risks',
+  'project_issues'
+];
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -1460,6 +1469,15 @@ app.get('/api/health', (req, res) => {
 
 app.post('/api/query', async (req, res) => {
   const { table, operation, filters, payload, options } = req.body;
+
+// ✅ ADD THIS CHECK HERE
+if (!ALLOWED_TABLES.includes(table)) {
+  return res.json({
+    data: null,
+    error: { message: 'Invalid table' }
+  });
+}
+  
 
   try {
     let query = '';
