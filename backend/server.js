@@ -1458,6 +1458,132 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'AlignEx API is running' });
 });
 
+app.post('/api/query', async (req, res) => {
+  const { table, operation, filters, payload, options } = req.body;
+
+  try {
+    let query = '';
+    let values = [];
+
+    // -------------------------
+    // SELECT
+    // -------------------------
+    if (operation === 'select') {
+      query = `SELECT ${options?.columns || '*'} FROM ${table}`;
+    }
+
+    // -------------------------
+    // INSERT
+    // -------------------------
+    if (operation === 'insert') {
+      const keys = Object.keys(payload);
+      values = Object.values(payload);
+
+      query = `
+        INSERT INTO ${table} (${keys.join(',')})
+        VALUES (${keys.map((_, i) => `$${i + 1}`).join(',')})
+        RETURNING *`;
+    }
+
+    // -------------------------
+    // UPDATE
+    // -------------------------
+    if (operation === 'update') {
+      const keys = Object.keys(payload);
+      values = Object.values(payload);
+
+      const setClause = keys
+        .map((k, i) => `${k} = $${i + 1}`)
+        .join(',');
+
+      query = `UPDATE ${table} SET ${setClause}`;
+    }
+
+    // -------------------------
+    // DELETE
+    // -------------------------
+    if (operation === 'delete') {
+      query = `DELETE FROM ${table}`;
+    }
+
+    // -------------------------
+    // FILTERS (WHERE)
+    // -------------------------
+    if (filters && filters.length > 0) {
+      const where = filters.map((f, index) => {
+        values.push(f.value);
+
+        const paramIndex = values.length;
+
+        switch (f.op) {
+          case 'eq':
+            return `${f.field} = $${paramIndex}`;
+          case 'neq':
+            return `${f.field} != $${paramIndex}`;
+          case 'like':
+            return `${f.field} LIKE $${paramIndex}`;
+          case 'in':
+            return `${f.field} = ANY($${paramIndex})`;
+          default:
+            throw new Error(`Unsupported operator: ${f.op}`);
+        }
+      });
+
+      query += ` WHERE ${where.join(' AND ')}`;
+    }
+
+    // -------------------------
+    // ORDER
+    // -------------------------
+    if (options?.order) {
+      query += ` ORDER BY ${options.order.column} ${
+        options.order.ascending ? 'ASC' : 'DESC'
+      }`;
+    }
+
+    // -------------------------
+    // LIMIT
+    // -------------------------
+    if (options?.limit) {
+      query += ` LIMIT ${options.limit}`;
+    }
+
+    // -------------------------
+    // RETURNING
+    // -------------------------
+    if (operation === 'update' || operation === 'delete') {
+      query += ` RETURNING *`;
+    }
+
+    // -------------------------
+    // DEBUG LOGS
+    // -------------------------
+    console.log('---- SQL QUERY ----');
+    console.log(query);
+    console.log('VALUES:', values);
+
+    // -------------------------
+    // EXECUTE
+    // -------------------------
+    const result = await pool.query(query, values);
+
+    res.json({
+      data: result.rows,
+      error: null
+    });
+
+  } catch (err) {
+    console.error('Query Error:', err);
+
+    res.json({
+      data: null,
+      error: {
+        message: err.message
+      }
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
